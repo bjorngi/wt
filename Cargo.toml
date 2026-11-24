@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anstream = "1.0.0"
+anstyle = "1.0.14"
+anyhow = "1.0.105"
+clap = { version = "4.6.9", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+terminal_size = "0.4.4"
+toml = "1.2.2"
