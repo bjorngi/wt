@@ -126,8 +126,13 @@ pub fn check(repo: &str, path: &Path) -> Check {
 /// One `wt ls` row.
 pub struct Row {
     pub repo: String,
+    /// The base repo this worktree belongs to.
+    pub base: Option<PathBuf>,
     pub branch: String,
+    pub detached: bool,
     pub is_default: bool,
+    /// HEAD sha.
+    pub head: Option<String>,
     pub age: String,
     pub subject: String,
     pub ahead: u32,
@@ -142,7 +147,9 @@ pub fn row(repo: &str, path: &Path) -> Row {
     let default = base.as_deref().map(default_branch).unwrap_or_else(|| "main".to_string());
     let branch = current_branch(path);
     let is_default = branch.as_deref() == Some(default.as_str());
+    let detached = branch.is_none();
     let branch = branch.unwrap_or_else(|| "(detached)".to_string());
+    let head = git::opt(path, &["rev-parse", "--verify", "--quiet", "HEAD"]);
 
     let (age, subject) = match git::opt(path, &["log", "-1", "--format=%ct%x00%s"]) {
         Some(out) => {
@@ -178,7 +185,21 @@ pub fn row(repo: &str, path: &Path) -> Row {
         }
     }
 
-    Row { repo: repo.to_string(), branch, is_default, age, subject, ahead, behind, staged, modified, untracked }
+    Row {
+        repo: repo.to_string(),
+        base,
+        branch,
+        detached,
+        is_default,
+        head,
+        age,
+        subject,
+        ahead,
+        behind,
+        staged,
+        modified,
+        untracked,
+    }
 }
 
 fn relative_age(timestamp: i64) -> String {

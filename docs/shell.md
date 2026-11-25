@@ -38,6 +38,7 @@ The `_wt` function is registered with `compdef _wt wt` when `compinit` has alrea
 | `wt rm <TAB>` / `wt cd <TAB>` | workspaces |
 | `wt rm f <TAB>` | the repos in workspace `f` |
 | `wt rm -<TAB>` / `wt cleanup -<TAB>` | `--yes` |
+| `wt ls -<TAB>` | `--offline`, `--refresh` |
 | `wt shell-init <TAB>` | `zsh` |
 
 The dynamic values come from a hidden command that prints one item per line, and prints nothing at all if something

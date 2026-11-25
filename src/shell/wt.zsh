@@ -36,8 +36,11 @@ _wt() {
     return
   fi
 
-  if [[ $words[CURRENT] == -* && ( $words[2] == rm || $words[2] == cleanup ) ]]; then
-    compadd -- --yes
+  if [[ $words[CURRENT] == -* ]]; then
+    case $words[2] in
+      rm|cleanup) compadd -- --yes ;;
+      ls) compadd -- --offline --refresh ;;
+    esac
     return
   fi
 

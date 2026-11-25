@@ -155,20 +155,51 @@ When there's nothing to remove, it prints `Nothing to clean up.`
 ## `wt ls`
 
 ```
-wt ls
+wt ls [--offline | --refresh]
 ```
 
 ```
 feature-login
-  api  feature/login  2h  Fix token refresh  ↑2     ~1 ?3
-  web  feature/login  1d  Add login form     ↑1 ↓4
+  api  feature/login  2h  Fix token refresh  ↑2     ~1 ?3  #123 ✓ approved
+  web  feature/login  1d  Add login form     ↑1 ↓4         #124 draft •
 ```
 
 Columns: repo, branch (dim when it's the default branch), age of the last commit, its subject (truncated to fit the
-terminal), `↑ahead`/`↓behind` compared with `origin/<default>`, and `+staged ~modified ?untracked`. Status is gathered
-in parallel, and nothing is fetched. The output goes to stdout.
+terminal), `↑ahead`/`↓behind` compared with `origin/<default>`, `+staged ~modified ?untracked`, and the
+[provider](#providers-github) column. Git status is gathered in parallel, and nothing is fetched. The output goes to stdout.
 
 With no workspaces it prints `No workspaces. Create one with: wt add <feature> <repo>`.
+
+### Providers (GitHub)
+
+The last column comes from providers. Today the only one is GitHub, which uses the [`gh` CLI](https://cli.github.com).
+It's on automatically when `gh` is installed and `origin` points at a configured host:
+
+| Shown | Meaning |
+|---|---|
+| `#123` | open pull request (green); a link to it in terminals that support links |
+| `#123 draft` | draft pull request |
+| `#123 merged` / `#123 closed` | the branch's latest pull request is merged / closed (no checks or review shown) |
+| `✓` / `✗` / `•` | checks passed / failed / pending, on the PR's latest commit |
+| `approved` / `changes requested` / `review required` | review decision (not shown for drafts) |
+| `no PR` + checks | the branch is pushed but has no pull request |
+| *(nothing)* | not pushed, on the default branch, or detached |
+
+- It makes one `gh api graphql` request per repo, covering all of that repo's branches. Pull requests from forks with
+  the same branch name are ignored. If a branch has several pull requests, the open one wins, then the newest merged one.
+- **Cache**: results are stored in `$WT_ROOT/.wt/cache/github.json`, keyed by repo, branch and local `HEAD`, and count
+  as fresh for 2 minutes. A new commit triggers a refetch.
+- **Deadline**: all provider calls together get 3 seconds. If they're slower, or `gh` fails, the cached result is
+  shown dimmed, followed by one warning such as `! github  not logged in to github.com (run: gh auth login …)`.
+  `ls` itself never fails because of a provider.
+- `--offline` shows only cached results and never calls `gh`. `--refresh` ignores the cache.
+- Config in `$WT_ROOT/.wt.toml`:
+  ```toml
+  [github]
+  # enabled = false                     # default: on when `gh` is on PATH
+  hosts = ["github.com", "git.corp.com"]  # GitHub Enterprise hosts (default: github.com)
+  ```
+  The host and owner/name come from `remote.origin.url` in the base repo (SSH, scp-style and HTTPS URLs are supported).
 
 ---
 

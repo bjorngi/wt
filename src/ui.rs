@@ -14,6 +14,7 @@ pub const YELLOW: Style = AnsiColor::Yellow.on_default();
 pub const RED: Style = AnsiColor::Red.on_default();
 pub const CYAN: Style = AnsiColor::Cyan.on_default();
 pub const BLUE: Style = AnsiColor::Blue.on_default();
+pub const MAGENTA: Style = AnsiColor::Magenta.on_default();
 pub const DIM: Style = Style::new().dimmed();
 pub const BOLD: Style = Style::new().bold();
 

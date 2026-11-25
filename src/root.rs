@@ -36,6 +36,11 @@ impl Root {
         self.path.join("worktrees")
     }
 
+    /// Provider caches: `$WT_ROOT/.wt/cache/`.
+    pub fn cache_dir(&self) -> PathBuf {
+        self.path.join(".wt").join("cache")
+    }
+
     pub fn repo_path(&self, name: &str) -> PathBuf {
         self.base().join(name)
     }

@@ -3,6 +3,8 @@ mod config;
 mod error;
 mod git;
 mod include;
+mod provider;
+mod remote;
 mod repo;
 mod root;
 mod spec;
@@ -17,6 +19,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::error::UserError;
 use crate::git::GitError;
+use crate::provider::CacheMode;
 use crate::root::Root;
 
 /// Work on one feature across several repos: one folder per feature, one git worktree per repo.
@@ -56,8 +59,15 @@ enum Cmd {
         #[arg(short, long)]
         yes: bool,
     },
-    /// List workspaces and the status of their repos
-    Ls,
+    /// List workspaces and the status of their repos (plus pull requests and checks, via providers)
+    Ls {
+        /// Don't ask providers (GitHub); show only cached results
+        #[arg(long, conflicts_with = "refresh")]
+        offline: bool,
+        /// Ignore cached provider results
+        #[arg(long)]
+        refresh: bool,
+    },
     /// Go to a workspace ($WT_ROOT/worktrees without a name)
     Cd { feature: Option<String> },
     /// Print shell integration (cd support + completion): eval "$(wt shell-init zsh)"
@@ -92,7 +102,14 @@ fn run(cmd: Cmd) -> anyhow::Result<()> {
                 Cmd::Add { feature, specs } => cmd::add::run(&root, &feature, &specs),
                 Cmd::Rm { feature, repo, yes } => cmd::rm::run(&root, &feature, repo.as_deref(), yes),
                 Cmd::Cleanup { yes } => cmd::cleanup::run(&root, yes),
-                Cmd::Ls => cmd::ls::run(&root),
+                Cmd::Ls { offline, refresh } => {
+                    let mode = match (offline, refresh) {
+                        (true, _) => CacheMode::Offline,
+                        (_, true) => CacheMode::Refresh,
+                        _ => CacheMode::Normal,
+                    };
+                    cmd::ls::run(&root, mode)
+                }
                 Cmd::Cd { feature } => cmd::cd::run(&root, feature.as_deref()),
                 Cmd::ShellInit { .. } | Cmd::Complete { .. } => unreachable!(),
             }

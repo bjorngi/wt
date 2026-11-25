@@ -72,13 +72,17 @@ Run the same command again after pulling changes.
    src/main/resources/application-local.yml
    ```
 
+7. *(Optional)* **Pull request and build status in `wt ls`**: install the [GitHub CLI](https://cli.github.com) and
+   run `gh auth login`. Nothing else is needed; see [providers](docs/commands.md#providers-github) for GitHub Enterprise
+   and for turning it off.
+
 ## Usage
 
 ```sh
 wt add feature/login @app         # create workspace feature-login with api + web on branch feature/login, cd into it
 wt add feature/login worker       # add another repo to it (same branch)
 wt add review-123 web:fix/npe     # check out an existing (remote) branch
-wt ls                             # all workspaces: branch, last commit, ahead/behind, dirty files
+wt ls                             # all workspaces: branch, last commit, ahead/behind, dirty files, PR + checks
 wt cd login                       # jump to a workspace (exact name, or a unique substring)
 wt cd                             # go to $WT_ROOT/worktrees
 wt rm feature/login web           # remove one repo from the workspace
@@ -91,6 +95,7 @@ wt cleanup                        # remove every workspace whose remote branches
   accepted everywhere.
 - `rm` and `cleanup` ask `[y/N]` before deleting anything that would lose work. Pass `-y`/`--yes` to skip the
   question, for example in scripts.
+- `wt ls` asks GitHub at most every 2 minutes per branch (cached). `--offline` skips it, `--refresh` forces it.
 - `<TAB>` completes commands, workspaces, repos, `@presets` and remote branches (`web:<TAB>`).
 - `wt help <command>` shows each command's options.
 
@@ -109,6 +114,7 @@ wt cleanup                   # once the remote branches are deleted, the workspa
 - [docs/commands.md](docs/commands.md): exactly what each command does
 - [docs/shell.md](docs/shell.md): shell integration and completion
 - [docs/design.md](docs/design.md): output conventions, architecture, testing, non-goals and ideas for later
+- [docs/extensions.md](docs/extensions.md): proposal for pluggable providers (GitHub PR status, merged detection, `repo#123` specs)
 
 ## Development
 

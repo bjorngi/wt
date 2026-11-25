@@ -157,6 +157,7 @@ impl Env {
             .current_dir(cwd)
             .env("WT_ROOT", &self.root)
             .env("WT_CD_FILE", &self.cd_file)
+            .env("PATH", self.path_env())
             .env("NO_COLOR", "1")
             .env("GIT_AUTHOR_NAME", "Test")
             .env("GIT_AUTHOR_EMAIL", "test@example.com")
@@ -171,6 +172,41 @@ impl Env {
 
     fn wt(&self, args: &[&str]) -> Run {
         self.wt_in(&self.dir, args)
+    }
+
+    /// `$dir/bin` first on PATH, so tests can put a fake `gh` there.
+    fn path_env(&self) -> std::ffi::OsString {
+        let mut paths = vec![self.dir.join("bin")];
+        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+        std::env::join_paths(paths).unwrap()
+    }
+
+    /// Make base/<repo>'s origin look like github.com/<slug>, while git still fetches from the local remote.
+    fn pretend_github(&self, repo: &str, slug: &str) {
+        let url = format!("https://github.com/{slug}.git");
+        let base = self.base(repo);
+        git(&base, &["remote", "set-url", "origin", &url]);
+        git(&base, &["config", &format!("url.{}.insteadOf", self.remote(repo).display()), &url]);
+    }
+
+    /// A fake `gh` that prints `response`, or fails with `gh: boom` when `response` is `None`.
+    /// Every call is appended to `$dir/gh-calls`.
+    fn fake_gh(&self, response: Option<&str>) {
+        let bin = self.dir.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let calls = self.dir.join("gh-calls");
+        let body = match response {
+            Some(json) => format!("cat <<'EOF'\n{json}\nEOF\n"),
+            None => "echo 'gh: boom' >&2\nexit 1\n".to_string(),
+        };
+        let script = bin.join("gh");
+        std::fs::write(&script, format!("#!/bin/sh\necho call >> '{}'\n{body}", calls.display())).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    fn gh_calls(&self) -> usize {
+        std::fs::read_to_string(self.dir.join("gh-calls")).map(|s| s.lines().count()).unwrap_or(0)
     }
 }
 
@@ -512,4 +548,46 @@ fn shell_init_is_valid_zsh() {
         let check = Command::new("zsh").arg("-n").arg(&script).output().unwrap();
         assert!(check.status.success(), "zsh -n: {}", String::from_utf8_lossy(&check.stderr));
     }
+}
+
+// ------------------------------------------------------------------------------------ github
+
+const PR_RESPONSE: &str = r#"{"data":{"repository":{"b0":{"nodes":[{"number":7,"state":"OPEN","isDraft":false,"url":"https://github.com/acme/alde/pull/7","reviewDecision":"APPROVED","headRepositoryOwner":{"login":"acme"},"commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"SUCCESS"}}}]}}]},"r0":{"target":{"statusCheckRollup":{"state":"SUCCESS"}}}}}}"#;
+
+#[test]
+fn ls_shows_pull_request_status_from_github() {
+    let env = Env::new();
+    env.add_repo("alde");
+    env.add_repo("pen");
+    env.pretend_github("alde", "acme/alde");
+    env.fake_gh(Some(PR_RESPONSE));
+    assert_ok(&env.wt(&["add", "feature/login", "@alde"]));
+
+    let run = env.wt(&["ls"]);
+    assert_ok(&run);
+    let alde = run.stdout.lines().find(|l| l.contains("alde")).unwrap();
+    assert!(alde.ends_with("#7 ✓ approved"), "{}", run.stdout);
+    let pen = run.stdout.lines().find(|l| l.contains("pen")).unwrap();
+    assert!(!pen.contains('#'), "pen's origin isn't GitHub: {}", run.stdout);
+    assert_eq!(env.gh_calls(), 1, "one call per GitHub repo");
+
+    // Served from the cache: gh isn't called, even though it would now fail.
+    env.fake_gh(None);
+    let run = env.wt(&["ls"]);
+    assert!(run.stdout.contains("#7 ✓ approved"), "{}", run.stdout);
+    assert_eq!(env.gh_calls(), 1);
+
+    // --offline never calls gh; --refresh does, and a failure falls back to the cache with a warning.
+    assert!(env.wt(&["ls", "--offline"]).stdout.contains("#7"));
+    assert_eq!(env.gh_calls(), 1);
+    let run = env.wt(&["ls", "--refresh"]);
+    assert_ok(&run);
+    assert!(run.stdout.contains("#7 ✓ approved"), "{}", run.stdout);
+    assert!(run.stderr.contains("! github  boom"), "{}", run.stderr);
+    assert_eq!(env.gh_calls(), 2);
+
+    // Can be switched off.
+    std::fs::write(env.root.join(".wt.toml"), "[github]\nenabled = false\n").unwrap();
+    assert!(!env.wt(&["ls", "--refresh"]).stdout.contains("#7"));
+    assert_eq!(env.gh_calls(), 2);
 }
